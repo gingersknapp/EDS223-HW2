@@ -1,3 +1,6 @@
+# Legacy of redlining in current environmental (in)justice
+Olivia Knapp
+October 25, 2026
 
 ```{r}
 # Load packages
@@ -8,7 +11,7 @@ library(spData)
 library(knitr)
 ```
 
-## Legacy of redlining in current environmental (in)justice
+## Historically red-lined neighborhoods in LA
 
 ```{r}
 #1. Create a map of historically red-lined neighborhoods, colored by HOLC grade
@@ -93,8 +96,7 @@ holc_ej |> group_by(grade) |> summarize(
 
 
 ```
-
-# Current Conditions by HOLC Grades
+ ## Current Conditions by HOLC Grades
 
 
 ```{r}
@@ -102,38 +104,35 @@ holc_ej |> group_by(grade) |> summarize(
 holc_ej |> group_by(grade) |> drop_na(LOWINCPCT)|> summarize(low_inc_pct = mean(LOWINCPCT)) |> ggplot(
     mapping  = aes(x = grade, y = low_inc_pct, fill = grade)) + 
     geom_bar(stat = 'identity') +
-    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray')) +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray'), name = 'HOLC Ranking') +
     xlab("HOLC Grade") +
     ylab("Percent Low Income Population") +
     ggtitle("Mean Proportion of Low-Income Residents by HOLC Grade") +
-    theme_minimal() +
-    theme(legend.position = "none")
+    theme_minimal()
 
 # Percentile for PM2.5
 # Check why NAs dropped
 holc_ej |> group_by(grade) |> drop_na(P_PM25)|> summarize(pm25_percentile = mean(P_PM25, drop_na = TRUE)) |> ggplot(
     mapping  = aes(x = grade, y = pm25_percentile, fill = grade)) + 
     geom_bar(stat = 'identity') +
-    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray')) +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray'), name = 'HOLC Ranking') +
         xlab("HOLC Grade") +
     ylab("Percentile") +
-    ggtitle("Mean National Percentile Ranking for Exposure to Air Pollutants (PM2.5) by HOLC Grade") +
-    theme_minimal() +
-    theme(legend.position = "none")
-
+    ggtitle("Mean National Percentile Ranking for Exposure to fine inhalable Air Pollutants (PM2.5) by HOLC Grade") +
+    theme_minimal()
 
 # Percentile for Low Life Expectancy
 holc_ej |> group_by(grade) |> drop_na(P_LIFEEXPPCT)|> summarize(lowlifeexp_percentile = mean(P_LIFEEXPPCT)) |> ggplot(
     mapping  = aes(x = grade, y = lowlifeexp_percentile, fill = grade)) + 
     geom_bar(stat = 'identity') +
-    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray')) +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray'), name = 'HOLC Ranking') +
     xlab("HOLC Grade") +
     ylab("Percentile") +
     ggtitle("Mean National Percentile Ranking for Low Life Expectancy by HOLC Grade") +
-    theme_minimal() +
-    theme(legend.position = "none")
-
+    theme_minimal()
 ```
+
+On average, areas that received an HOLC grade of C and D currently have a greater proportion of people with low incomes, greater exposure to air pollutants, and have a  lower life expectancy.  30% of census blocks in Los Angeles county are located in areas that received a grade of C or D.  Those census have a disporptionately higher population of low-income residents, at just over 40% of their population. They rank over the 80th national percentile in exposure to fine inhabalble air particles and just under the 60th percentile for low life expectancy; they experience more air pollution of fine particles than 80% of cencus blocks across the US and lower life expectancy than 60%.  In contrast, in areas that recieved a grade of A (just over 1% of LA county's census blocks), less that 20% of the population is low-income.  Areas that recieved an A still rank in the 60th percentile for fine air particle exposure, but just over the 20th percentile for life-expectancy.  This indicates that the NEW DEAL HOLC ranking system has resulted in measurable demographic differences decades later.  Diversion of investments from these areas likely contributes to current disparities in wealth and environmental safety as redlined areas received less real estate investment and resulting social, safety, and  environmental investment.  Lower wealth and greater environmental health risks likely combine with other socioeconmic factors to create the observed disparity in life expectancy. 
 
 ## Part 2: Legacy of redlining in pedstrian and bike accidents
 
@@ -159,13 +158,56 @@ dim(crashes)
 #Conver to geometry class
 crashes_spatial <- crashes_points |> mutate(
     POINT_X_numeric = as.numeric(POINT_X),
-    POINT_Y_numeric = as.numeric(POINT_Y))|> drop_na(POINT_Y_numeric, POINT_X_numeric) |> st_as_sf(coords = c("POINT_X_numeric", "POINT_Y_numeric", crs = W84))
+    POINT_Y_numeric = as.numeric(POINT_Y)
+    )|> drop_na(
+        POINT_Y_numeric, POINT_X_numeric
+    ) |> st_as_sf(
+        coords = c('POINT_X_numeric', 'POINT_Y_numeric'),
+        crs = 4326)
 
 #Check CRS
-if(st_crs(crashes_spatial) == st_crs(la_ej)){
+if(st_crs(crashes_spatial) == st_crs(la_map)){
   print('File coordinate reference systems match')
 } else{
   warning('File coordinate reference systems do not match.  Transform one file before joining')
 }
+
+# Transform crs to match joined holc_ej
 crashes_transformed <- st_transform(crashes_spatial, crs = st_crs(la_map))
+
+#Confirm CRS change
+if(st_crs(crashes_spatial) == st_crs(la_map)){
+  print('File coordinate reference systems match')
+} else{
+  warning('File coordinate reference systems do not match.  Transform one file before joining')
+}
+
+#Join with HOLC data
+crashes_holc <- st_join(y = la_map, x = crashes_transformed,  join = st_intersects, left = TRUE) |> st_drop_geometry()
+
+#Confirm join success
+if (nrow(crashes_holc) == nrow(crashes_transformed)){
+  print('Join was successful: all crashes included')
+} else {
+  print("join failed.")
+  print(paste('crashes_holc has', nrow(crashes_holc), 'rows'))
+  print(paste('crashes_transformed has ',nrow(crashes_transformed), 'rows'))
+}
+
+#Summarize bike/pedestrain crash trends by HOLC grade
+crashes_bike_ped <- crashes_holc |> filter(BICYCLE_ACCIDENT == "Y" |
+    PEDESTRIAN_ACCIDENT == "Y") |> drop_na(grade)
+crashes_bike_ped |> group_by(grade
+    ) |> summarize(percent = n()/nrow(crashes_bike_ped) *100
+    ) |> ggplot(
+    mapping  = aes(x = grade, y = percent, fill = grade)) + 
+    geom_bar(stat = 'identity') +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray'),
+    name = "HOLC Ranking") +
+    xlab("HOLC Grade") +
+    ylab("Percent of Crashes") +
+    ggtitle("Percentage of bicycle and pedestrian \ncrashes in LA County by location HOLC ranking") +
+    theme_minimal()
 ```
+
+Pedestrian and cyclist safety appears to follow similar patterns with HOLC ranking as income and air pollution, likely contributing to the disparity in life expectancy.  Among areas that received an HOLC ranking, less than 5% of crashes occur in areas with a ranking of A, but over 60% occur in areas wth rankings of C and nearly 30% in areas ranked as D. This likely resulted from less investment in safety infrastcure and maintenance in these historically lower-income areas, especially if hazard reporting, funding, and response times are influenced by income and demographic factors.  To strategically improve pedestrian and cyclist safety, the County of LA can invest in more safety measures in historically redlined areas and critically examine how it makes decisions related to safety infrastructure investment and maintenance.  
