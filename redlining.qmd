@@ -1,0 +1,171 @@
+
+```{r}
+# Load packages
+library(tidyverse)
+library(tmap)
+library(sf)
+library(spData)
+library(knitr)
+```
+
+## Legacy of redlining in current environmental (in)justice
+
+```{r}
+#1. Create a map of historically red-lined neighborhoods, colored by HOLC grade
+# Load data
+# Assignments\EDS223-HW2\data\mapping-inequality\mapping-inequality-new-haven.json
+la_map <- st_read('Assignments/EDS223-HW2/data/mapping-inequality/mapping-inequality-los-angeles.json')
+la_ej <- st_read('Assignments/EDS223-HW2/data/ejscreen/EJSCREEN_2023_BG_StatePct_with_AS_CNMI_GU_VI.gdb') |> filter(CNTY_NAME == 'Los Angeles County')
+
+crashes <- st_read('Assignments/EDS223-HW2/data/SWITRS_LA/Crashes.csv')
+
+# Check crs: WGS 84
+st_crs(la_map)
+
+#Identify columns
+colnames(la_map)
+length(unique(la_map$grade))
+unique(la_map$grade)
+nrow(la_map)
+
+
+#Map it
+tm_basemap("OpenStreetMap") +
+tm_shape(la_map) +
+    tm_polygons(fill = 'grade',
+        fill.scale = tm_scale(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2')), 
+       fill.legend = tm_legend(title = "HOLC Grade")) +
+tm_scalebar(position = tm_pos_in("right", "top")) +
+tm_compass(position = tm_pos_in('right', 'bottom')) +
+tm_legend(position = tm_pos_out('right', 'center')) +
+tm_layout(
+    main.title = 'Historical Redlining in Los Angeles County (HOLC ranking)'
+)
+```
+
+
+```{r}
+# Summary table of % census block groups within and outide of each HOLC grade
+
+# Join holc data and ej data
+### ej data has census block FIPs Code in ID column
+### Test if the LA HOLC data contains FIPS Codes in "area_ID"
+nrow(la_map)
+length(unique(la_map$area_id))
+### Check if reference systems match
+if(st_crs(la_map) == st_crs(la_ej)){
+  print('File coordinate reference systems match')
+} else{
+  warning('File coordinate reference systems do not match.  Transform one file before joining')
+}
+
+# Transform la_ej to match la_mpa
+ej_transformed <- st_transform(la_ej, crs = st_crs(la_map))
+# Check whether census blocks overlap
+if (any(st_intersects(la_map, ej_transformed, sparse = FALSE))){
+  print('census blocks overlap')
+} else {
+  print("census blocks do not overlap")
+}
+
+sf_use_s2(FALSE)
+# Join files
+holc_ej <- st_join(y = la_map, x = ej_transformed,  join = st_within, left = TRUE) |> st_drop_geometry()
+
+#Confirm join success
+if (nrow(holc_ej) == nrow(ej_transformed)){
+  print('Join was successful: all census blocks included')
+} else {
+  print("join failed.")
+  print(paste('holc_ej has', nrow(holc_ej), 'rows'))
+  print(paste('ej_transformed has ',nrow(ej_transformed), 'rows'))
+}
+
+# Create a table summarizing
+### percent of census blocks sithin each HOLC grade
+### percent of cencus blocks that don't fall within a census grade
+
+# Check number of graded rows in the joined data ()
+
+holc_ej |> group_by(grade) |> summarize(
+    Percent = ((n()/nrow(holc_ej))*100)
+) |> knitr::kable(col.names = c("HOLC Grade", "Percent of Census Blocks"))
+
+
+```
+
+# Current Conditions by HOLC Grades
+
+
+```{r}
+# Percent Low Income
+holc_ej |> group_by(grade) |> drop_na(LOWINCPCT)|> summarize(low_inc_pct = mean(LOWINCPCT)) |> ggplot(
+    mapping  = aes(x = grade, y = low_inc_pct, fill = grade)) + 
+    geom_bar(stat = 'identity') +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray')) +
+    xlab("HOLC Grade") +
+    ylab("Percent Low Income Population") +
+    ggtitle("Mean Proportion of Low-Income Residents by HOLC Grade") +
+    theme_minimal() +
+    theme(legend.position = "none")
+
+# Percentile for PM2.5
+# Check why NAs dropped
+holc_ej |> group_by(grade) |> drop_na(P_PM25)|> summarize(pm25_percentile = mean(P_PM25, drop_na = TRUE)) |> ggplot(
+    mapping  = aes(x = grade, y = pm25_percentile, fill = grade)) + 
+    geom_bar(stat = 'identity') +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray')) +
+        xlab("HOLC Grade") +
+    ylab("Percentile") +
+    ggtitle("Mean National Percentile Ranking for Exposure to Air Pollutants (PM2.5) by HOLC Grade") +
+    theme_minimal() +
+    theme(legend.position = "none")
+
+
+# Percentile for Low Life Expectancy
+holc_ej |> group_by(grade) |> drop_na(P_LIFEEXPPCT)|> summarize(lowlifeexp_percentile = mean(P_LIFEEXPPCT)) |> ggplot(
+    mapping  = aes(x = grade, y = lowlifeexp_percentile, fill = grade)) + 
+    geom_bar(stat = 'identity') +
+    scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray')) +
+    xlab("HOLC Grade") +
+    ylab("Percentile") +
+    ggtitle("Mean National Percentile Ranking for Low Life Expectancy by HOLC Grade") +
+    theme_minimal() +
+    theme(legend.position = "none")
+
+```
+
+## Part 2: Legacy of redlining in pedstrian and bike accidents
+
+```{r}
+#Check NAs in Lattitude/Longitude vs Point_X/Point_Y
+nrow(crashes)
+nrow(crashes['LONGITUDE'] == "NA")
+nrow(crashes[crashes['POINT_X'] == "NA"])
+sum(is.na(crashes$LATITUDE))
+sum(is.na(crashes$POINT_X))
+
+crashes |> summarize_all(~sum(is.na(.)))
+colnames(crashes)
+
+crashes |> filter(crashes['LONGITUDE'] == "NA") |> dim()
+# Missing data for 97350 rows
+crashes |> filter(crashes['POINT_X'] == "NA") |> dim()
+# Missing data for 9484 rows
+crashes_points <- crashes |> select(-c('LATITUDE', 'LONGITUDE'))
+dim(crashes_points)
+dim(crashes)
+
+#Conver to geometry class
+crashes_spatial <- crashes_points |> mutate(
+    POINT_X_numeric = as.numeric(POINT_X),
+    POINT_Y_numeric = as.numeric(POINT_Y))|> drop_na(POINT_Y_numeric, POINT_X_numeric) |> st_as_sf(coords = c("POINT_X_numeric", "POINT_Y_numeric", crs = W84))
+
+#Check CRS
+if(st_crs(crashes_spatial) == st_crs(la_ej)){
+  print('File coordinate reference systems match')
+} else{
+  warning('File coordinate reference systems do not match.  Transform one file before joining')
+}
+crashes_transformed <- st_transform(crashes_spatial, crs = st_crs(la_map))
+```
