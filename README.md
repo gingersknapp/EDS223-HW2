@@ -10,8 +10,6 @@ This project explores redlining in LA County and current disparities in income, 
 |README.md                    | README for the repository           |
 |redlining.qmd                | Analysis code document              |
 |redlining.pdf                | Exportable analysis PDF             |
-|.quarto/typst/packages/preview | Files for viewing redlining.pdf     |
-|LICENSE                      | Use license                         |
 |.gitignore                   | Untracked files                     |                            
 
 
