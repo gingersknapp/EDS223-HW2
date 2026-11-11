@@ -122,7 +122,7 @@ holc_ej |> group_by(grade) |> drop_na(P_LIFEEXPPCT)|> summarize(lowlifeexp_perce
     scale_fill_manual(values = c('darkgreen', 'deepskyblue2', 'darkgoldenrod1', 'brown2', 'lightgray'), name = 'HOLC Ranking') +
     xlab("HOLC Ranking") +
     ylab("Percentile") +
-    ggtitle("Mean National Percentile Ranking for Low Life Expectancy by HOLC Ranking") +
+    ggtitle("Mean National Percentile Ranking for \nLow Life Expectancy by HOLC Ranking") +
     theme_minimal()
 ```
 
